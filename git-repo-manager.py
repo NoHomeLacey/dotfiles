@@ -2,7 +2,7 @@
 #########
 # GitHub Repository Sync Script
 # Author: Henry Standing <henry.standing@gmail.com>
-# Version: v1.2, 2025-02-04
+# Version: v1.3, 2025-02-04
 # Source: https://github.com/NoHomeLacey/dotfiles
 #########
 
@@ -13,6 +13,7 @@ This script automatically manages GitHub repositories by:
   - Installing necessary dependencies (Git, GitHub CLI).
   - Ensuring GitHub authentication via `gh auth login` and `ssh -T git@github.com`.
   - Cloning missing repositories and pulling the latest changes for existing ones.
+  - Ignoring `.DS_Store` files globally.
   - Providing interactive options for committing and pushing changes before pulling.
 
 Options:
@@ -111,6 +112,23 @@ def ensure_dependencies():
 # Authentication & Setup                                                      #
 ###############################################################################
 
+def configure_global_gitignore():
+    """Ensures `.DS_Store` is ignored globally on this machine."""
+    global_gitignore = os.path.expanduser("~/.gitignore_global")
+    
+    # Check if .gitignore_global exists, create if necessary
+    if not os.path.exists(global_gitignore):
+        print("📁 Creating global .gitignore file...")
+        run_command(f"touch {global_gitignore}")
+
+    # Ensure .DS_Store is ignored
+    run_command(f'grep -qxF ".DS_Store" {global_gitignore} || echo ".DS_Store" >> {global_gitignore}')
+    
+    # Set it as the global ignore file
+    run_command("git config --global core.excludesfile ~/.gitignore_global")
+
+    print("✅ .DS_Store is now globally ignored in Git.")
+
 def authenticate_github():
     """Ensures the user is authenticated with GitHub CLI."""
     if subprocess.call(["gh", "auth", "status"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
@@ -120,7 +138,7 @@ def authenticate_github():
         print("✅ GitHub authentication is already set up.")
 
 def check_ssh_access():
-    """Verifies SSH authentication with GitHub and correctly handles expected output."""
+    """Verifies SSH authentication with GitHub."""
     print("🔍 Checking SSH access to GitHub...")
     
     result = subprocess.run(["ssh", "-T", "git@github.com"], capture_output=True, text=True)
@@ -167,9 +185,6 @@ def clone_or_update_repos(repos):
             print(f"\n🔄 Updating existing repo: {repo_name}")
             os.chdir(repo_path)
 
-            # ✅ Ensure .DS_Store is ignored
-            run_command("echo '.DS_Store' >> .gitignore && git add .gitignore && git commit -m 'Ignore macOS .DS_Store files' || true")
-
             # ✅ Check for uncommitted changes (excluding .DS_Store)
             changes = run_command("git status --porcelain | grep -v .DS_Store", capture_output=True)
             if changes:
@@ -181,15 +196,11 @@ def clone_or_update_repos(repos):
                     run_command(f'git commit -m "Auto-commit before pull: {repo_name}"')
                     run_command("git push origin $(git rev-parse --abbrev-ref HEAD)", check=True)
 
-            current_branch = run_command("git rev-parse --abbrev-ref HEAD", capture_output=True)
-            if "fatal" not in current_branch:
-                run_command(f"git pull origin {current_branch}", check=True)
+            run_command("git pull origin $(git rev-parse --abbrev-ref HEAD)", check=True)
 
         else:
             print(f"🚀 Cloning new repository: {repo_name}")
             run_command(f"git clone {repo_url} {repo_path}")
-
-    print("🎉 All repositories are synced!")
 
 ###############################################################################
 # Main Execution                                                              #
@@ -197,20 +208,15 @@ def clone_or_update_repos(repos):
 
 def main():
     """Main script execution."""
-    print("🔧 Setting up Git & Syncing GitHub Repositories...")
-
     ensure_dependencies()
+    configure_global_gitignore()
     authenticate_github()
     check_ssh_access()
 
     username = get_github_user()
-    print(f"👤 Logged in as: {username}")
-
     repos = fetch_repos(username)
     if repos:
         clone_or_update_repos(repos)
-    else:
-        print("❌ No repositories found. Exiting.")
 
 if __name__ == "__main__":
     main()
