@@ -167,11 +167,14 @@ def clone_or_update_repos(repos):
             print(f"\n🔄 Updating existing repo: {repo_name}")
             os.chdir(repo_path)
 
-            # ✅ Check for uncommitted changes
-            changes = run_command("git status --porcelain", capture_output=True)
+            # ✅ Ensure .DS_Store is ignored
+            run_command("echo '.DS_Store' >> .gitignore && git add .gitignore && git commit -m 'Ignore macOS .DS_Store files' || true")
+
+            # ✅ Check for uncommitted changes (excluding .DS_Store)
+            changes = run_command("git status --porcelain | grep -v .DS_Store", capture_output=True)
             if changes:
                 print(f"\n📝 Uncommitted changes detected in {repo_name}:")
-                print(changes)  
+                print(changes)
 
                 if input(f"Commit all changes in {repo_name}? (y/n): ").strip().lower() == "y":
                     run_command("git add .")
